@@ -55,9 +55,14 @@ textarea {
     resize: none;
     overflow-y: auto;
     font-size: clamp(1rem, 4vw, 1.25rem);
+    field-sizing: content;
 }
 
 
 textarea:focus {
     outline: none;
+}
+
+input[type="slider"] {
+    display: none;
 }

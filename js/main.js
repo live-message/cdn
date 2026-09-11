@@ -6,6 +6,7 @@ import "./utils/localstorage.js";
 import "./utils/svg.js";
 import "./ui/switcher.js";
 import "./ui/lines.js";
+import "./ui/slider.js";
 import { SPA } from './utils/spa.js';
 
 globalThis.notification = notification;
