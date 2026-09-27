@@ -47,3 +47,7 @@
 [hidden] {
     display: none !important;
 }
+
+.color-none {
+    filter: hue-rotate(calc(-1 * var(--hue-offset, 0deg))) !important;
+}
