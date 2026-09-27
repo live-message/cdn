@@ -37,7 +37,6 @@ export class ResourceManager {
     scripts.forEach((oldScript) => {
       const id = this.getResourceId(oldScript);
       if (this.loaded.has(id)) {
-        // Опционально: можно добавить логику перезапуска, если это не модуль
         return;
       }
 

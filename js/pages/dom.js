@@ -15,7 +15,6 @@ export const dom = {
 
 const textCache = new Map();
 
-// Загружает текст файла с простым кэшем по URL (используется меню и шаблонами)
 export async function fetchTextCached(url) {
   if (textCache.has(url)) return textCache.get(url);
 

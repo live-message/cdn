@@ -33,9 +33,6 @@ async function switchTo(container, value, animate, forceAnims) {
 
   const activeBtn = buttons.find((btn) => parse(btn).value === value);
   const anims = forceAnims ?? (activeBtn ? parse(activeBtn).anims : []);
-
-  // Первая анимация — входящему блоку,
-  // вторая (если есть) — выходящему.
   const [inName, outName = inName] = anims;
 
   buttons.forEach((btn) => {

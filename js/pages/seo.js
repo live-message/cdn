@@ -30,7 +30,6 @@ export class SEOManager {
     this.updateMeta("author", seo.author || this.defaults.author);
     this.updateMeta("robots", seo.robots || this.defaults.robots);
 
-    // Open Graph
     if (seo.ogTitle) this.updateMeta("og:title", seo.ogTitle, "property");
     if (seo.ogDescription)
       this.updateMeta("og:description", seo.ogDescription, "property");

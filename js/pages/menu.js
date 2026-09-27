@@ -17,7 +17,6 @@ function buildDialog(menuName, html) {
 
   dialog.appendChild(template.content.cloneNode(true));
 
-  // Скрипты, вставленные через innerHTML, не выполняются — пересоздаём их
   for (const sourceScript of scripts) {
     const runnableScript = document.createElement("script");
     for (const { name, value } of sourceScript.attributes) {

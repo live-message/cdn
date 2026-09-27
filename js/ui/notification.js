@@ -3,22 +3,17 @@ const MAX_NOTIFICATIONS = 3;
 const DURATION = 3000; // Время жизни в мс
 const ANIMATION_DURATION = 300; // Должно совпадать с transition в CSS
 
-// Функция безопасного удаления уведомления
 function removeNotification(notifObj) {
-  // Очищаем все таймеры, чтобы избежать конфликтов
   clearTimeout(notifObj.showTimeout);
   clearTimeout(notifObj.hideTimeout);
 
-  // Удаляем из массива активных
   const index = activeNotifications.indexOf(notifObj);
   if (index > -1) {
     activeNotifications.splice(index, 1);
   }
 
-  // Убираем класс для анимации скрытия
   notifObj.element.classList.remove("show");
 
-  // Полностью удаляем из DOM после завершения анимации
   setTimeout(() => {
     if (notifObj.element.parentNode) {
       notifObj.element.parentNode.removeChild(notifObj.element);
@@ -26,7 +21,6 @@ function removeNotification(notifObj) {
   }, ANIMATION_DURATION);
 }
 
-// Функция получения/создания контейнера
 function getContainer() {
   let container = document.getElementById("notification-container");
   if (container) return container;
