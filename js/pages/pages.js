@@ -1,119 +1,69 @@
 import page from "https://cdn.jsdelivr.net/npm/page@1.11.6/+esm";
 import { SEOManager } from "./seo.js";
 import { ResourceManager } from "./resources.js";
+import { fetchTextCached } from "./dom.js";
 
 class SPARouter {
   constructor() {
     this.pagesDir = "/pages";
-    this.routesConfig = null;
-    this.htmlCache = new Map();
     this.defaultExtensions = ["html", "htm"];
-    this.routes = [];
-
     this.seoManager = new SEOManager();
     this.resourceManager = new ResourceManager();
   }
 
   async init() {
-    await this.loadRoutesConfig();
-    this.compileRoutes();
-    page("*", (ctx) => this.loadPage(ctx.path));
+    await this.registerRoutes();
+    page("*", (ctx) => this.handleRoute(ctx, null));
     page.start();
   }
 
-  async loadRoutesConfig() {
+  async registerRoutes() {
     try {
       const res = await fetch(`${location.origin}/routes.json`);
-      this.routesConfig = res.ok ? await res.json() : { routes: [] };
-    } catch {
-      this.routesConfig = { routes: [] };
+      const config = res.ok ? await res.json() : { routes: [] };
+
+      config.routes.forEach((route) => {
+        const pagePath = route.path.replace(/\{(\w+)\}/g, ":$1");
+        page(pagePath, (ctx) => this.handleRoute(ctx, route));
+      });
+    } catch (error) {
+      console.error("Ошибка загрузки routes.json:", error);
     }
   }
 
-  compileRoutes() {
-    this.routes = this.routesConfig.routes.map((route) => {
-      const pattern = route.path;
-      const paramNames = [];
-      const paramRegex = /\{(\w+)\}/g;
-      let match;
-      while ((match = paramRegex.exec(pattern)) !== null) {
-        paramNames.push(match[1]);
-      }
-
-      const regexPattern = pattern
-        .replace(/\{(\w+)\}/g, "(?<$1>[^/]+)")
-        .replace(/\//g, "\\/");
-
-      const regex = new RegExp(`^${regexPattern}$`);
-
-      return {
-        ...route,
-        originalPath: pattern,
-        normalizedPath: this.normalizePath(pattern),
-        regex,
-        paramNames,
-      };
-    });
-  }
-
-  parseParams(path, regex) {
-    const match = path.match(regex);
-    if (!match || !match.groups) return {};
-    return match.groups;
-  }
-
-  normalizePath(path) {
-    let p = path.split("?")[0].split("#")[0];
-    p = p.replace(/\/{2,}/g, "/");
-    if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
-    return p || "/";
-  }
-
-  getRouteConfig(path) {
-    const p = this.normalizePath(path);
-    return (
-      this.routes.find((r) => r.normalizedPath === p) ||
-      this.routes.find((r) => r.regex.test(p))
-    );
-  }
-
-  async loadPage(path) {
-    const normalizedPath = this.normalizePath(path);
-    const routeConfig = this.getRouteConfig(normalizedPath);
-
+  async handleRoute(ctx, routeConfig) {
     try {
       let pageData;
-
       if (routeConfig) {
-        const params = this.parseParams(normalizedPath, routeConfig.regex);
         pageData = await this.getPageData(routeConfig);
-        pageData.params = params;
+        pageData.params = ctx.params;
       } else {
-        pageData = await this.resolveByConvention(normalizedPath);
+        pageData = await this.resolveByConvention(ctx.path);
       }
 
       if (!pageData) {
-        this.show404(normalizedPath);
-        return;
+        return this.show404(ctx.path);
       }
 
       this.renderPage(pageData);
     } catch (error) {
-      console.error(`Ошибка загрузки страницы "${normalizedPath}":`, error);
-      this.show404(normalizedPath);
+      console.error(`Ошибка загрузки страницы "${ctx.path}":`, error);
+      this.show404(ctx.path);
     }
   }
 
-  async resolveByConvention(normalizedPath) {
-    const fileBase = normalizedPath === "/" ? "home" : normalizedPath.slice(1);
+  async resolveByConvention(path) {
+    const cleanPath = path.split("?")[0].split("#")[0].replace(/\/{2,}/g, "/");
+    let fileBase = cleanPath === "/" ? "home" : cleanPath.slice(1);
+    if (fileBase.endsWith("/")) fileBase = fileBase.slice(0, -1);
 
     for (const ext of this.defaultExtensions) {
       try {
         const cached = await this.getCachedHtml(`${fileBase}.${ext}`);
         return { ...cached, seo: cached.extractedSEO, params: {} };
-      } catch { }
+      } catch {
+      }
     }
-
     return null;
   }
 
@@ -142,16 +92,12 @@ class SPARouter {
   }
 
   async getCachedHtml(pageFile) {
-    if (this.htmlCache.has(pageFile)) return this.htmlCache.get(pageFile);
+    const html = await fetchTextCached(`${this.pagesDir}/${pageFile}`);
 
-    const res = await fetch(`${this.pagesDir}/${pageFile}`);
-    if (!res.ok) throw new Error(`Page file not found: ${pageFile}`);
-
-    const html = await res.text();
     const doc = new DOMParser().parseFromString(html, "text/html");
-    const baseUrl = `${location.origin}${this.pagesDir}/${pageFile}`;
-    this.resolveRelativeUrls(doc, "script[src]", "src", baseUrl);
-    this.resolveRelativeUrls(doc, 'link[rel="stylesheet"][href]', "href", baseUrl);
+
+    this.resolveRelativeUrls(doc, "script[src]", "src");
+    this.resolveRelativeUrls(doc, 'link[rel="stylesheet"][href]', "href");
 
     const parsed = {
       bodyContent: doc.body.innerHTML,
@@ -161,11 +107,10 @@ class SPARouter {
       extractedSEO: this.extractSEO(doc.head),
     };
 
-    this.htmlCache.set(pageFile, parsed);
     return parsed;
   }
 
-  resolveRelativeUrls(doc, selector, attr, baseUrl) {
+  resolveRelativeUrls(doc, selector, attr) {
     doc.querySelectorAll(selector).forEach((el) => {
       const value = el.getAttribute(attr);
       if (!value) return;
@@ -173,7 +118,6 @@ class SPARouter {
       if (value.startsWith("/") || value.startsWith("data:")) return;
 
       const resolvedUrl = new URL(value, `${location.origin}/`).pathname;
-
       el.setAttribute(attr, resolvedUrl);
     });
   }
@@ -199,27 +143,21 @@ class SPARouter {
   }
 
   async show404(path) {
-    const notFoundRoute = this.getRouteConfig("/404");
-    if (notFoundRoute) {
-      try {
-        const pageData = await this.getPageData(notFoundRoute);
-        this.renderPage(pageData);
-        return;
-      } catch (error) {
-        console.error('Error loading "/404" page:', error);
-      }
+    const pageData = await this.resolveByConvention("/404");
+    if (pageData) {
+      this.renderPage(pageData);
+    } else {
+      this.renderFallback404(path);
     }
-
-    this.renderFallback404(path);
   }
 
   renderFallback404(path) {
-    document.title = "404 - Page Not Found";
+    document.title = "404";
     document.body.innerHTML = `
       <div style="text-align: center; padding: 50px;">
         <h1>❌ 404 - Page Not Found</h1>
         <p>Страница <strong>${path}</strong> не существует.</p>
-        <a href="/" onclick="page('/'); return false;">На главную</a>
+        <a href="/" onclick="window.page('/'); return false;">На главную</a>
       </div>
     `;
   }
